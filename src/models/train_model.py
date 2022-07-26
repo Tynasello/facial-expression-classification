@@ -1,11 +1,24 @@
 import torch
+import numpy as np
 import copy
+import os
+from ray import tune
+from ray.tune import CLIReporter
+from ray.tune.schedulers import ASHAScheduler
 
 from src.helpers import to_t
+from src.models import models
 
 
-def train_model(model, data_loaders, loss_fn, optimizer, num_epochs):
+def train_model(config, data_loaders, model_id, num_epochs=30, tuning=False):
     """Train model"""
+
+
+    # get desired model, loss function and optimization function
+    if model_id == "custom":
+        model, loss_fn, optimizer = models.get_custom_model()
+    else:
+        model, loss_fn, optimizer = models.get_pretrained_model(config["l1"], config["l2"], config["lr"])
 
     train_losses, train_accuracies, validation_losses, validation_accuracies = [], [], [], []
 
@@ -69,13 +82,17 @@ def train_model(model, data_loaders, loss_fn, optimizer, num_epochs):
                 validation_losses.append(epoch_loss)
                 validation_accuracies.append(epoch_accuracy)
                 # if our model is performing at its best (for validation data), update best parameters and highest accuracy
-                if epoch_accuracy > highest_accuracy:
+                if not tuning and epoch_accuracy > highest_accuracy:
                     highest_accuracy = epoch_accuracy
                     best_model_params = copy.deepcopy(model.state_dict())
 
             # print performance for current epoch
             print(f"{phase}")
             print(f"Loss: {epoch_loss:.4f}   Acc: {epoch_accuracy:.4f}")
+
+        # report results to raytune
+        if tuning:
+            report_raytune(epoch, model, optimizer, validation_losses[-1], validation_accuracies[-1])
 
         print()
         print()
@@ -84,3 +101,62 @@ def train_model(model, data_loaders, loss_fn, optimizer, num_epochs):
     model.load_state_dict(best_model_params)
     return model, train_losses, train_accuracies, validation_losses, validation_accuracies
 
+
+def report_raytune(epoch, model, optimizer, validation_loss, validation_accuracy):
+    """Save raytune checkpoint with hyperparameters and report to raytune with performance results"""
+
+    with tune.checkpoint_dir(epoch) as checkpoint_dir:
+        path = os.path.join(checkpoint_dir, 'checkpoint')
+        torch.save((model.state_dict(), optimizer.state_dict()), path)
+    tune.report(loss=validation_loss, accuracy=validation_accuracy)
+
+
+def run_hyperparameter_search(data_loaders, model_id, num_epochs):
+    """Attempt to find the best hyperparameters for desired model"""
+
+    # tuning the following hyperparameters: learning rate, linear layer 1 num ouput features, linear layer 2 num ouput features.
+    config = {
+        "l1": tune.sample_from(lambda _: 2 ** np.random.randint(5, 9)),
+        "l2": tune.sample_from(lambda _: 2 ** np.random.randint(5, 9)),
+        "lr": tune.loguniform(1e-4, 1e-1),
+    }
+
+    # monitor loss metric and stop bad performing searches
+    scheduler = ASHAScheduler(
+        metric="loss",
+        mode="min",
+        # max num of epochs to train with given hyperparameters
+        max_t=10,
+        # stop bad performing search after 3 epochs
+        grace_period=3,
+        reduction_factor=2)
+
+    # report metrics in terminal
+    reporter = CLIReporter(
+        metric_columns=["loss", "accuracy", "training_iteration"])
+
+    # start hyperparameter search
+    result = tune.run(
+        tune.with_parameters(train_model, data_loaders=data_loaders, model_id=model_id, num_epochs=num_epochs,
+                             tuning=True),
+        resources_per_trial={"cpu": 1, "gpu": 1},
+        config=config,
+        # try 20 different hyperparameter combinations
+        num_samples=20,
+        scheduler=scheduler,
+        # save results search trials
+        local_dir=os.path.abspath('data/outputs/raytune_result'),
+        # save one checkpoint for each search trial
+        keep_checkpoints_num=1,
+        # save checkpoint based on minimum validation loss
+        checkpoint_score_attr='min-validation_loss',
+        progress_reporter=reporter
+    )
+
+    # Extract the best trial run from the search.
+    best_trial = result.get_best_trial(
+        'loss', 'min', 'last'
+    )
+
+    # return best hyperparameters and best trial validation loss and accuracy
+    return best_trial.config, best_trial.last_result['loss'], best_trial.last_result['accuracy']

@@ -8,7 +8,7 @@ The dataset for this project was provided by the [Facial Expression Recognition 
 
 ### About the Project
 
-This project involved the use of transfer learning and a CNN (convolutional neural network). Data augmentation was performed on the data set to increase model performance while reducing the likelihood of overfitting.
+This project involved the use of transfer learning and a CNN (convolutional neural network). I tuned hyperparameters (learing rate and number of features in linear layers) using Ray Tune to optimize model accuracy. Data augmentation was performed on the data set to increase model performance while reducing the likelihood of overfitting.
 
 Initially, a custom model was developed. This model architecture consisted of 6 convolutional layers with ReLU activation functions, and max pooling, followed by 3 linear layers. By first creating my own model, I gained a better understanding of convolutional layers and feature mapping, as well as the effect of different kernel sizes, padding and stride values, and pooling layers. This model achieved ~52% accuracy on the validation set.
 
@@ -24,7 +24,6 @@ To load the model with trained parameters:
 Technologies and tools used in this project: Python, PyTorch, NumPy, Pandas, Matplotlib, Jupyter Notebook, Google Colab.
 
 A precursor to this project was my MNIST handwritten digit classifier. This introductory [project](https://github.com/Tynasello/mnist-digit-classifier) provided me with experience in PyTorch and allowed me to apply what I had learned about deep learning and neural networks up to that point.
-
 
 ### Resources
 

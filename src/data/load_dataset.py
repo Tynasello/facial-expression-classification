@@ -70,9 +70,10 @@ def get_data_loaders():
 
     train_data, validation_data, test_data, validationTestDataTransforms = load_data()
 
-    trainDataLoader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, shuffle=True)
-    validationDataLoader = torch.utils.data.DataLoader(validation_data, batch_size=BATCH_SIZE, shuffle=True)
-    testDataLoader = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, shuffle=True)
+    trainDataLoader = torch.utils.data.DataLoader(train_data, batch_size=BATCH_SIZE, num_workers=2, shuffle=True)
+    validationDataLoader = torch.utils.data.DataLoader(validation_data, batch_size=BATCH_SIZE, num_workers=2,
+                                                       shuffle=True)
+    testDataLoader = torch.utils.data.DataLoader(test_data, batch_size=BATCH_SIZE, num_workers=2, shuffle=True)
 
     data_loaders = {'Train': trainDataLoader, 'Validation': validationDataLoader, 'Test': testDataLoader}
 
